@@ -64,7 +64,7 @@ type connection struct {
 // Query is an SQL query that is executed on a connection
 type Query struct {
 	sync.Mutex
-	log      RotationLogger //log.Logger
+	Log      RotationLogger //log.Logger
 	desc     *prometheus.Desc
 	errDesc  *prometheus.Desc
 	metrics  map[*connection][]prometheus.Metric

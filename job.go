@@ -34,15 +34,15 @@ func (j *Job) Init(logger RotationLogger, queries map[string]string) error {
 			level.Warn(j.log).Log("msg", "Skipping invalid query")
 			continue
 		}
-		q.log = newRotationLogger(j.log, logger.GetMaxMessages())
-		q.log.SetLogger(log.With(q.log.GetLogger(), "query", q.Name))
+		q.Log = newRotationLogger(j.log, logger.GetMaxMessages())
+		q.Log.SetLogger(log.With(q.Log.GetLogger(), "query", q.Name))
 		if q.Query == "" && q.QueryRef != "" {
 			if qry, found := queries[q.QueryRef]; found {
 				q.Query = qry
 			}
 		}
 		if q.Query == "" {
-			level.Warn(q.log).Log("msg", "Skipping empty query")
+			level.Warn(q.Log).Log("msg", "Skipping empty query")
 			continue
 		}
 		if q.metrics == nil {
@@ -67,11 +67,12 @@ func (j *Job) Init(logger RotationLogger, queries map[string]string) error {
 			},
 		)
 		q.errDesc = prometheus.NewDesc(
-			MetricNameRE.ReplaceAllString("sql_"+q.Name+"_errors", ""),
+			"sql_query_errors",
 			"Query errors",
 			nil,
 			prometheus.Labels{
-				"sql_job": j.Name,
+				"sql_job":   j.Name,
+				"sql_query": q.Name,
 			},
 		)
 	}
@@ -159,16 +160,16 @@ func (j *Job) runOnceConnection(conn *connection, done chan int) {
 		}
 		if q.desc == nil {
 			// this may happen if the metric registration failed
-			level.Warn(q.log).Log("msg", "Skipping query. Collector is nil")
+			level.Warn(q.Log).Log("msg", "Skipping query. Collector is nil")
 			continue
 		}
-		level.Debug(q.log).Log("msg", "Running Query")
+		level.Debug(q.Log).Log("msg", "Running Query")
 		// execute the query on the connection
 		if err := q.Run(conn); err != nil {
-			level.Warn(q.log).Log("msg", "Failed to run query", "err", err)
+			level.Warn(q.Log).Log("msg", "Failed to run query", "err", err)
 			continue
 		}
-		level.Debug(q.log).Log("msg", "Query finished")
+		level.Debug(q.Log).Log("msg", "Query finished")
 		updated++
 	}
 }

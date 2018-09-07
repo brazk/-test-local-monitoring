@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -89,84 +90,105 @@ func main() {
 	http.HandleFunc("/query_logs", func(w http.ResponseWriter, r *http.Request) {
 		job := r.URL.Query().Get("job")
 		query := r.URL.Query().Get("query")
-		w.Write([]byte(`<html>
+		t := template.New("query_logs")
+		t, _ = t.Parse(`<html>
 		<head><title>SQL Exporter</title></head>
 		<body>
-		<h1>SQL Exporter</h1>`))
-		found := false
+		<h1>SQL Exporter</h1>
+		<h2>Logs for job={{.jobName}} query={{.queryName}}</h2>
+		{{if .found}}
+			{{range .logs}}
+			<p>{{.}}</p>
+			{{end}}
+		{{else}}
+			<p>Logs not found. Please see <a href='job_logs?job={{.jobName}}'>job logs</a></p>
+		{{end}}
+		</body>
+		</html>`)
+		data := make(map[string]interface{})
+		data["jobName"] = job
+		data["queryName"] = query
+		data["found"] = false
 		for _, j := range exporter.jobs {
 			if job == j.Name {
 				for _, q := range j.Queries {
 					if q.Name == query {
-						fmt.Fprintf(w, "<h2>Logs for fob='%s' query='%s'</h2>",
-							j.Name, q.Name)
-						for _, msg := range q.log.GetHistory() {
-							found = true
-							w.Write([]byte("<p>"))
-							w.Write([]byte(msg))
-							w.Write([]byte("</p>"))
-						}
+						data["found"] = true
+						data["logs"] = q.Log.GetHistory()
 					}
 				}
 			}
 		}
-		if !found {
-			fmt.Fprintf(w, "Logs not found. Please see <a href='job_logs?job=%s'>job logs</a>",
-				job)
-		}
-		w.Write([]byte(`</body>
-		</html>`))
+		t.Execute(w, data)
 	})
 
 	http.HandleFunc("/job_logs", func(w http.ResponseWriter, r *http.Request) {
 		job := r.URL.Query().Get("job")
-		w.Write([]byte(`<html>
-		<head><title>SQL Exporter</title></head>
-		<body>
-		<h1>SQL Exporter</h1>`))
-		found := false
-		for _, j := range exporter.jobs {
-			if job == j.Name {
-				found = true
-				fmt.Fprintf(w, "<h2>Logs for job='%s'</h2>",
-					j.Name)
-				for _, msg := range j.log.GetHistory() {
-					w.Write([]byte("<p>"))
-					w.Write([]byte(msg))
-					w.Write([]byte("</p>"))
-				}
-			}
-		}
-		if !found {
-			w.Write([]byte("Logs not found. Please see logs on logs server"))
-		}
-		w.Write([]byte(`</body>
-		</html>`))
-	})
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
+		t := template.New("job_logs")
+		t, _ = t.Parse(`<html>
 		<head><title>SQL Exporter</title></head>
 		<body>
 		<h1>SQL Exporter</h1>
-		<p><a href="` + *metricsPath + `">Metrics</a></p>
-		<h2>Logs</h2>
-		<table border='1'><tr><th>Job</th><th>Query</th><th>Status</th><th>Logs</th></tr>`))
+		<h2>Logs for job={{.jobName}}</h2>
+		{{if .found}}
+			{{range .logs}}
+			<p>{{.}}</p>
+			{{end}}
+		{{else}}
+			<p>Logs not found. Please see logs on logs server</p>
+		{{end}}
+		</body>
+		</html>`)
+		data := make(map[string]interface{})
+		data["jobName"] = job
+		data["found"] = false
 		for _, j := range exporter.jobs {
-			for _, q := range j.Queries {
-
-				success := "Success"
-				if q.log.GetLastIsError() {
-					success = "<strong>Failure</strong>"
-				}
-				fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td><a href='query_logs?job=%s&query=%s'>Logs</a></td></td>",
-					j.Name, q.Name, success, j.Name, q.Name)
+			if job == j.Name {
+				data["found"] = true
+				data["logs"] = j.log.GetHistory()
 			}
 		}
+		t.Execute(w, data)
+	})
 
-		w.Write([]byte(`</table>
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		t := template.New("index")
+		t, _ = t.Parse(`<html>
+		<head><title>SQL Exporter</title></head>
+		<body>
+		<h1>SQL Exporter</h1>
+		<p><a href="{{.metricsPath}}">Metrics</a></p>
+		<h2>Logs</h2>
+		<table border='1'><tr><th>Job</th><th>Query</th><th>Status</th><th>Logs</th></tr>
+		{{range .jobs}}
+			{{$job := .}}
+			{{range .Queries}}
+				<tr>
+					<td>
+						{{$job.Name}}
+					</td>
+					<td>
+						{{.Name}}
+					</td>
+					<td>
+						{{if .Log.LastIsError}}
+						<strong>Failure</strong>
+						{{else}}
+						Success
+						{{end}}
+					</td>
+					<td>
+						<a href='query_logs?job={{$job.Name}}&query={{.Name}}'>Logs</a>
+					</td>
+				</tr>
+			{{end}}
+		{{end}}
 		</body>
-		</html>
-		`))
+		</html>`)
+		data := make(map[string]interface{})
+		data["metricsPath"] = *metricsPath
+		data["jobs"] = exporter.jobs
+		t.Execute(w, data)
 	})
 
 	level.Info(logger).Log("msg", "Listening", "listenAddress", *listenAddress)

@@ -18,7 +18,7 @@ type RotationLogger interface {
 	GetHistory() []string
 	GetMaxMessages() uint
 	GerErrorsCount() uint
-	GetLastIsError() bool
+	LastIsError() bool
 }
 
 type rotationLogger struct {
@@ -98,10 +98,10 @@ func (rl *rotationLogger) GetMaxMessages() uint {
 	return rl.maxMessages
 }
 
-func (rl *rotationLogger) GetLastIsError() bool {
+func (rl *rotationLogger) LastIsError() bool {
 	return rl.lastIsError
 }
 
-func (rl *rotationLogger) GerErrorsCount() uint {
+func (rl rotationLogger) GerErrorsCount() uint {
 	return rl.errorCounter
 }

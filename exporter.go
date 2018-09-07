@@ -114,7 +114,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				query.errDesc,
 				prometheus.CounterValue,
-				float64(query.log.GerErrorsCount()),
+				float64(query.Log.GerErrorsCount()),
 			)
 		}
 	}
