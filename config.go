@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-kit/kit/log"
 	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v2"
@@ -43,7 +42,7 @@ type File struct {
 
 // Job is a collection of connections and queries
 type Job struct {
-	log         log.Logger
+	log         RotationLogger
 	conns       []*connection
 	Name        string        `yaml:"name"`      // name of this job
 	KeepAlive   bool          `yaml:"keepalive"` // keep connection between runs?
@@ -65,8 +64,9 @@ type connection struct {
 // Query is an SQL query that is executed on a connection
 type Query struct {
 	sync.Mutex
-	log      log.Logger
+	log      RotationLogger //log.Logger
 	desc     *prometheus.Desc
+	errDesc  *prometheus.Desc
 	metrics  map[*connection][]prometheus.Metric
 	Name     string   `yaml:"name"`      // the prometheus metric name
 	Help     string   `yaml:"help"`      // the prometheus metric help text

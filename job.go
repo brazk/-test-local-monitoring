@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -25,15 +26,17 @@ var (
 )
 
 // Init will initialize the metric descriptors
-func (j *Job) Init(logger log.Logger, queries map[string]string) error {
-	j.log = log.With(logger, "job", j.Name)
+func (j *Job) Init(logger RotationLogger, queries map[string]string) error {
+	j.log = newRotationLogger(logger, logger.GetMaxMessages())
+	j.log.SetLogger(log.With(j.log.GetLogger(), "job", j.Name))
 	// register each query as an metric
 	for _, q := range j.Queries {
 		if q == nil {
 			level.Warn(j.log).Log("msg", "Skipping invalid query")
 			continue
 		}
-		q.log = log.With(j.log, "query", q.Name)
+		q.log = newRotationLogger(j.log, logger.GetMaxMessages())
+		q.log.SetLogger(log.With(q.log.GetLogger(), "query", q.Name))
 		if q.Query == "" && q.QueryRef != "" {
 			if qry, found := queries[q.QueryRef]; found {
 				q.Query = qry
@@ -64,14 +67,22 @@ func (j *Job) Init(logger log.Logger, queries map[string]string) error {
 				"sql_job": j.Name,
 			},
 		)
+		q.errDesc = prometheus.NewDesc(
+			MetricNameRE.ReplaceAllString("sql_"+q.Name+"_errors", ""),
+			"Query errors",
+			nil,
+			prometheus.Labels{
+				"sql_job": j.Name,
+			},
+		)
 	}
 	return nil
 }
 
-// Run prepares and runs the job
-func (j *Job) Run() {
+// Prepare the job
+func (j *Job) Prepare() {
 	if j.log == nil {
-		j.log = log.NewNopLogger()
+		j.log = newRotationLogger(log.NewNopLogger(), 100)
 	}
 	// if there are no connection URLs for this job it can't be run
 	if j.Connections == nil {
@@ -106,8 +117,11 @@ func (j *Job) Run() {
 			})
 		}
 	}
-	level.Debug(j.log).Log("msg", "Starting")
+}
 
+// Run the job
+func (j *Job) Run() {
+	level.Debug(j.log).Log("msg", "Starting")
 	// enter the run loop
 	// tries to run each query on each connection at approx the interval
 	for {
@@ -119,6 +133,15 @@ func (j *Job) Run() {
 		level.Debug(j.log).Log("msg", "Sleeping until next run", "sleep", j.Interval.String())
 		time.Sleep(j.Interval)
 	}
+}
+
+// RunOnce run the job once
+func (j *Job) RunOnce(wg *sync.WaitGroup) {
+	// wg.Add(1)
+	if err := j.runOnce(); err != nil {
+		level.Error(j.log).Log("msg", "Failed to run", "err", err)
+	}
+	wg.Done()
 }
 
 func (j *Job) runOnceConnection(conn *connection, done chan int) {

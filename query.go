@@ -12,7 +12,7 @@ import (
 // Run executes a single Query on a single connection
 func (q *Query) Run(conn *connection) error {
 	if q.log == nil {
-		q.log = log.NewNopLogger()
+		q.log = newRotationLogger(log.NewNopLogger(), 100)
 	}
 	if q.desc == nil {
 		return fmt.Errorf("metrics descriptor is nil")
