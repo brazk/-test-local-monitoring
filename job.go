@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -136,12 +135,10 @@ func (j *Job) Run() {
 }
 
 // RunOnce run the job once
-func (j *Job) RunOnce(wg *sync.WaitGroup) {
-	// wg.Add(1)
+func (j *Job) RunOnce() {
 	if err := j.runOnce(); err != nil {
 		level.Error(j.log).Log("msg", "Failed to run", "err", err)
 	}
-	wg.Done()
 }
 
 func (j *Job) runOnceConnection(conn *connection, done chan int) {

@@ -64,7 +64,14 @@ func (e *Exporter) RunOnce() {
 	var wg sync.WaitGroup
 	wg.Add(len(e.jobs))
 	for _, job := range e.jobs {
-		go job.RunOnce(&wg)
+		if job == nil {
+			continue
+		}
+		job := job
+		go func() {
+			defer wg.Done()
+			go job.RunOnce()
+		}()
 	}
 	wg.Wait()
 }
