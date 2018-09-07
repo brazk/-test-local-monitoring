@@ -70,7 +70,7 @@ func (e *Exporter) RunOnce() {
 		job := job
 		go func() {
 			defer wg.Done()
-			go job.RunOnce()
+			job.RunOnce()
 		}()
 	}
 	wg.Wait()
