@@ -1,0 +1,17 @@
+stages:
+  - build
+
+variables:
+  CONTAINER_CURRENT_IMAGE: ${CI_REGISTRY}/${CI_PROJECT_PATH}:${CI_COMMIT_REF_SLUG}
+
+push-image:
+  stage: build
+  allow_failure: false
+  image: docker:stable
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  after_script:
+    - docker logout $CI_REGISTRY
+  script:
+    - docker build -t $CONTAINER_CURRENT_IMAGE .
+    - docker push $CONTAINER_CURRENT_IMAGE
