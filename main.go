@@ -15,6 +15,69 @@ import (
 	"github.com/prometheus/common/version"
 )
 
+const indexPage string = `<html>
+<head><title>SQL Exporter</title></head>
+<body>
+<h1>SQL Exporter</h1>
+<p><a href="{{.metricsPath}}">Metrics</a></p>
+<h2>Logs</h2>
+<table border='1'><tr><th>Job</th><th>Query</th><th>Status</th><th>Logs</th></tr>
+{{range .jobs}}
+	{{$job := .}}
+	{{range .Queries}}
+		<tr>
+			<td>
+				{{$job.Name}}
+			</td>
+			<td>
+				{{.Name}}
+			</td>
+			<td>
+				{{if .Log.LastIsError}}
+				<strong>Failure</strong>
+				{{else}}
+				Success
+				{{end}}
+			</td>
+			<td>
+				<a href='query_logs?job={{$job.Name}}&query={{.Name}}'>Logs</a>
+			</td>
+		</tr>
+	{{end}}
+{{end}}
+</body>
+</html>`
+
+const jobLogsPage string = `<html>
+<head><title>SQL Exporter</title></head>
+<body>
+<h1>SQL Exporter</h1>
+<h2>Logs for job={{.jobName}}</h2>
+{{if .found}}
+	{{range .logs}}
+	<p>{{.}}</p>
+	{{end}}
+{{else}}
+	<p>Logs not found. Please see logs on logs server</p>
+{{end}}
+</body>
+</html>`
+
+const queryLogsPage string = `<html>
+<head><title>SQL Exporter</title></head>
+<body>
+<h1>SQL Exporter</h1>
+<h2>Logs for job={{.jobName}} query={{.queryName}}</h2>
+{{if .found}}
+	{{range .logs}}
+	<p>{{.}}</p>
+	{{end}}
+{{else}}
+	<p>Logs not found. Please see <a href='job_logs?job={{.jobName}}'>job logs</a></p>
+{{end}}
+</body>
+</html>`
+
 func init() {
 	prometheus.MustRegister(version.NewCollector("sql_exporter"))
 }
@@ -91,20 +154,7 @@ func main() {
 		job := r.URL.Query().Get("job")
 		query := r.URL.Query().Get("query")
 		t := template.New("query_logs")
-		t, _ = t.Parse(`<html>
-		<head><title>SQL Exporter</title></head>
-		<body>
-		<h1>SQL Exporter</h1>
-		<h2>Logs for job={{.jobName}} query={{.queryName}}</h2>
-		{{if .found}}
-			{{range .logs}}
-			<p>{{.}}</p>
-			{{end}}
-		{{else}}
-			<p>Logs not found. Please see <a href='job_logs?job={{.jobName}}'>job logs</a></p>
-		{{end}}
-		</body>
-		</html>`)
+		t, _ = t.Parse(queryLogsPage)
 		data := make(map[string]interface{})
 		data["jobName"] = job
 		data["queryName"] = query
@@ -125,20 +175,7 @@ func main() {
 	http.HandleFunc("/job_logs", func(w http.ResponseWriter, r *http.Request) {
 		job := r.URL.Query().Get("job")
 		t := template.New("job_logs")
-		t, _ = t.Parse(`<html>
-		<head><title>SQL Exporter</title></head>
-		<body>
-		<h1>SQL Exporter</h1>
-		<h2>Logs for job={{.jobName}}</h2>
-		{{if .found}}
-			{{range .logs}}
-			<p>{{.}}</p>
-			{{end}}
-		{{else}}
-			<p>Logs not found. Please see logs on logs server</p>
-		{{end}}
-		</body>
-		</html>`)
+		t, _ = t.Parse(jobLogsPage)
 		data := make(map[string]interface{})
 		data["jobName"] = job
 		data["found"] = false
@@ -153,38 +190,7 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t := template.New("index")
-		t, _ = t.Parse(`<html>
-		<head><title>SQL Exporter</title></head>
-		<body>
-		<h1>SQL Exporter</h1>
-		<p><a href="{{.metricsPath}}">Metrics</a></p>
-		<h2>Logs</h2>
-		<table border='1'><tr><th>Job</th><th>Query</th><th>Status</th><th>Logs</th></tr>
-		{{range .jobs}}
-			{{$job := .}}
-			{{range .Queries}}
-				<tr>
-					<td>
-						{{$job.Name}}
-					</td>
-					<td>
-						{{.Name}}
-					</td>
-					<td>
-						{{if .Log.LastIsError}}
-						<strong>Failure</strong>
-						{{else}}
-						Success
-						{{end}}
-					</td>
-					<td>
-						<a href='query_logs?job={{$job.Name}}&query={{.Name}}'>Logs</a>
-					</td>
-				</tr>
-			{{end}}
-		{{end}}
-		</body>
-		</html>`)
+		t, _ = t.Parse(indexPage)
 		data := make(map[string]interface{})
 		data["metricsPath"] = *metricsPath
 		data["jobs"] = exporter.jobs
