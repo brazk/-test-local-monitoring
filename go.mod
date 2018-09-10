@@ -1,4 +1,4 @@
-module github.com/justwatchcom/sql_exporter
+module gitlab.ozon.ru/sre/sql-exporter
 
 require (
 	cloud.google.com/go v0.26.0 // indirect
