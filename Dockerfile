@@ -1,14 +1,5 @@
-FROM quay.io/prometheus/golang-builder as builder
+FROM quay.io/prometheus/busybox:glibc
 
-ADD .   /go/src/github.com/justwatchcom/sql_exporter
-WORKDIR /go/src/github.com/justwatchcom/sql_exporter
+COPY /bin/linux_amd64/sql_exporter /bin/sql_exporter
 
-RUN make
-
-FROM        quay.io/prometheus/busybox:glibc
-MAINTAINER  The Prometheus Authors <prometheus-developers@googlegroups.com>
-
-COPY --from=builder /go/src/github.com/justwatchcom/sql_exporter/sql_exporter  /bin/sql_exporter
-
-EXPOSE      9237
-ENTRYPOINT  [ "/bin/sql_exporter" ]
+ENTRYPOINT ["sql_exporter"]

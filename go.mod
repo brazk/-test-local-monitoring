@@ -1,4 +1,4 @@
-module github.com/justwatchcom/sql_exporter
+module gitlab.ozon.ru/sre/sql-exporter
 
 require (
 	cloud.google.com/go v0.26.0 // indirect
@@ -6,7 +6,7 @@ require (
 	github.com/cenkalti/backoff v2.0.0+incompatible
 	github.com/denisenkom/go-mssqldb v0.0.0-20180901172138-1eb28afdf9b6
 	github.com/go-kit/kit v0.7.0
-	github.com/go-logfmt/logfmt v0.3.0 // indirect
+	github.com/go-logfmt/logfmt v0.3.0
 	github.com/go-sql-driver/mysql v1.4.0
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/protobuf v1.2.0 // indirect

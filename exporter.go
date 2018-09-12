@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/go-kit/kit/log"
+	"sync"
+
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -9,11 +10,11 @@ import (
 // Exporter collects SQL metrics. It implements prometheus.Collector.
 type Exporter struct {
 	jobs   []*Job
-	logger log.Logger
+	logger RotationLogger
 }
 
 // NewExporter returns a new SQL Exporter for the provided config.
-func NewExporter(logger log.Logger, configFile string) (*Exporter, error) {
+func NewExporter(logger RotationLogger, configFile string) (*Exporter, error) {
 	if configFile == "" {
 		configFile = "config.yml"
 	}
@@ -39,10 +40,40 @@ func NewExporter(logger log.Logger, configFile string) (*Exporter, error) {
 			continue
 		}
 		exp.jobs = append(exp.jobs, job)
-		go job.Run()
+		job.Prepare()
 	}
 
 	return exp, nil
+}
+
+// Run runs the jobs
+func (e *Exporter) Run() {
+	// run all jobs
+	for _, job := range e.jobs {
+		if job == nil {
+			continue
+		}
+		go job.Run()
+	}
+}
+
+// RunOnce runs the jobs once
+// func (e *Exporter) RunOnce(wg *sync.WaitGroup) {
+func (e *Exporter) RunOnce() {
+	// run all jobs
+	var wg sync.WaitGroup
+	wg.Add(len(e.jobs))
+	for _, job := range e.jobs {
+		if job == nil {
+			continue
+		}
+		job := job
+		go func() {
+			defer wg.Done()
+			job.RunOnce()
+		}()
+	}
+	wg.Wait()
 }
 
 // Describe implements prometheus.Collector
@@ -60,6 +91,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 				continue
 			}
 			ch <- query.desc
+			ch <- query.errDesc
 		}
 	}
 }
@@ -79,6 +111,11 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 					ch <- metric
 				}
 			}
+			ch <- prometheus.MustNewConstMetric(
+				query.errDesc,
+				prometheus.CounterValue,
+				float64(query.Log.GerErrorsCount()),
+			)
 		}
 	}
 }
