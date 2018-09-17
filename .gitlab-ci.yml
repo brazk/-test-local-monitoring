@@ -10,7 +10,7 @@ stages:
   - push
 
 variables:
-  CONTAINER_CURRENT_IMAGE: ${CI_REGISTRY}/${CI_PROJECT_PATH}:${CI_COMMIT_REF_SLUG}
+  CONTAINER_CURRENT_IMAGE: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_NAME}
 
 compile:
   image: golang:1.11.0
