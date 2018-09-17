@@ -25,24 +25,24 @@ var (
 )
 
 // Init will initialize the metric descriptors
-func (j *Job) Init(logger RotationLogger, queries map[string]string) error {
-	j.log = newRotationLogger(logger, logger.GetMaxMessages())
-	j.log.SetLogger(log.With(j.log.GetLogger(), "job", j.Name))
+func (j *Job) Init(logger *RotationLogger, queries map[string]string) error {
+	j.Logger = newRotationLogger(logger, logger.maxMessages)
+	j.Logger.SetLogger(log.With(j.Logger.GetLogger(), "job", j.Name))
 	// register each query as an metric
 	for _, q := range j.Queries {
 		if q == nil {
-			level.Warn(j.log).Log("msg", "Skipping invalid query")
+			level.Warn(j.Logger).Log("msg", "Skipping invalid query")
 			continue
 		}
-		q.Log = newRotationLogger(j.log, logger.GetMaxMessages())
-		q.Log.SetLogger(log.With(q.Log.GetLogger(), "query", q.Name))
+		q.Logger = newRotationLogger(j.Logger, logger.maxMessages)
+		q.Logger.SetLogger(log.With(q.Logger.GetLogger(), "query", q.Name))
 		if q.Query == "" && q.QueryRef != "" {
 			if qry, found := queries[q.QueryRef]; found {
 				q.Query = qry
 			}
 		}
 		if q.Query == "" {
-			level.Warn(q.Log).Log("msg", "Skipping empty query")
+			level.Warn(q.Logger).Log("msg", "Skipping empty query")
 			continue
 		}
 		if q.metrics == nil {
@@ -81,12 +81,12 @@ func (j *Job) Init(logger RotationLogger, queries map[string]string) error {
 
 // Prepare the job
 func (j *Job) Prepare() {
-	if j.log == nil {
-		j.log = newRotationLogger(log.NewNopLogger(), 100)
+	if j.Logger == nil {
+		j.Logger = newRotationLogger(log.NewNopLogger(), 100)
 	}
 	// if there are no connection URLs for this job it can't be run
 	if j.Connections == nil {
-		level.Error(j.log).Log("msg", "No conenctions for job", "job", j.Name)
+		level.Error(j.Logger).Log("msg", "No conenctions for job", "job", j.Name)
 		return
 	}
 	// make space for the connection objects
@@ -98,7 +98,7 @@ func (j *Job) Prepare() {
 		for _, conn := range j.Connections {
 			u, err := url.Parse(conn)
 			if err != nil {
-				level.Error(j.log).Log("msg", "Failed to parse URL", "url", conn, "err", err)
+				level.Error(j.Logger).Log("msg", "Failed to parse URL", "url", conn, "err", err)
 				continue
 			}
 			user := ""
@@ -121,16 +121,16 @@ func (j *Job) Prepare() {
 
 // Run the job
 func (j *Job) Run() {
-	level.Debug(j.log).Log("msg", "Starting")
+	level.Debug(j.Logger).Log("msg", "Starting")
 	// enter the run loop
 	// tries to run each query on each connection at approx the interval
 	for {
 		bo := backoff.NewExponentialBackOff()
 		bo.MaxElapsedTime = j.Interval
 		if err := backoff.Retry(j.runOnce, bo); err != nil {
-			level.Error(j.log).Log("msg", "Failed to run", "err", err)
+			level.Error(j.Logger).Log("msg", "Failed to run", "err", err)
 		}
-		level.Debug(j.log).Log("msg", "Sleeping until next run", "sleep", j.Interval.String())
+		level.Debug(j.Logger).Log("msg", "Sleeping until next run", "sleep", j.Interval.String())
 		time.Sleep(j.Interval)
 	}
 }
@@ -138,7 +138,7 @@ func (j *Job) Run() {
 // RunOnce run the job once
 func (j *Job) RunOnce() {
 	if err := j.runOnce(); err != nil {
-		level.Error(j.log).Log("msg", "Failed to run", "err", err)
+		level.Error(j.Logger).Log("msg", "Failed to run", "err", err)
 	}
 }
 
@@ -150,7 +150,7 @@ func (j *Job) runOnceConnection(conn *connection, done chan int) {
 
 	// connect to DB if not connected already
 	if err := conn.connect(j); err != nil {
-		level.Warn(j.log).Log("msg", "Failed to connect", "err", err)
+		level.Warn(j.Logger).Log("msg", "Failed to connect", "err", err)
 		return
 	}
 
@@ -160,16 +160,16 @@ func (j *Job) runOnceConnection(conn *connection, done chan int) {
 		}
 		if q.desc == nil {
 			// this may happen if the metric registration failed
-			level.Warn(q.Log).Log("msg", "Skipping query. Collector is nil")
+			level.Warn(q.Logger).Log("msg", "Skipping query. Collector is nil")
 			continue
 		}
-		level.Debug(q.Log).Log("msg", "Running Query")
+		level.Debug(q.Logger).Log("msg", "Running Query")
 		// execute the query on the connection
 		if err := q.Run(conn); err != nil {
-			level.Warn(q.Log).Log("msg", "Failed to run query", "err", err)
+			level.Warn(q.Logger).Log("msg", "Failed to run query", "err", err)
 			continue
 		}
-		level.Debug(q.Log).Log("msg", "Query finished")
+		level.Debug(q.Logger).Log("msg", "Query finished")
 		updated++
 	}
 }
@@ -217,7 +217,7 @@ func (c *connection) connect(job *Job) error {
 
 	// execute StartupSQL
 	for _, query := range job.StartupSQL {
-		level.Debug(job.log).Log("msg", "StartupSQL", "Query:", query)
+		level.Debug(job.Logger).Log("msg", "StartupSQL", "Query:", query)
 		conn.MustExec(query)
 	}
 

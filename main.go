@@ -1,18 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os"
 	"strings"
+	"text/template"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/version"
+	"gopkg.in/yaml.v2"
 )
 
 const indexPage string = `<html>
@@ -20,8 +24,9 @@ const indexPage string = `<html>
 <body>
 <h1>SQL Exporter</h1>
 <p><a href="{{.metricsPath}}">Metrics</a></p>
+<p><a href="/job_test">Job test</a></p>
 <h2>Logs</h2>
-<table border='1'><tr><th>Job</th><th>Query</th><th>Status</th><th>Logs</th></tr>
+<table border='1'><tr><th>Job</th><th>Job Status</th><th>Job Logs</th><th>Query</th><th>Query Status</th><th>Query Logs</th></tr>
 {{range .jobs}}
 	{{$job := .}}
 	{{range .Queries}}
@@ -30,17 +35,27 @@ const indexPage string = `<html>
 				{{$job.Name}}
 			</td>
 			<td>
-				{{.Name}}
-			</td>
-			<td>
-				{{if .Log.LastIsError}}
+				{{if $job.Logger.LastIsError}}
 				<strong>Failure</strong>
 				{{else}}
 				Success
 				{{end}}
 			</td>
 			<td>
-				<a href='query_logs?job={{$job.Name}}&query={{.Name}}'>Logs</a>
+				<a href='job_logs?job={{$job.Name}}'>Job Logs</a>
+			</td>
+			<td>
+				{{.Name}}
+			</td>
+			<td>
+				{{if .Logger.LastIsError}}
+				<strong>Failure</strong>
+				{{else}}
+				Success
+				{{end}}
+			</td>
+			<td>
+				<a href='query_logs?job={{$job.Name}}&query={{.Name}}'>Query Logs</a>
 			</td>
 		</tr>
 	{{end}}
@@ -54,11 +69,15 @@ const jobLogsPage string = `<html>
 <h1>SQL Exporter</h1>
 <h2>Logs for job={{.jobName}}</h2>
 {{if .found}}
-	{{range .logs}}
-	<p>{{.}}</p>
+	{{if .logs}}
+		{{range .logs}}
+		<p>{{.}}</p>
+		{{end}}
+	{{else}}
+		<p>Job logs is empty. Please see logs on logs server</p>
 	{{end}}
 {{else}}
-	<p>Logs not found. Please see logs on logs server</p>
+	<p>Job not found. Please see logs on logs server</p>
 {{end}}
 </body>
 </html>`
@@ -69,14 +88,156 @@ const queryLogsPage string = `<html>
 <h1>SQL Exporter</h1>
 <h2>Logs for job={{.jobName}} query={{.queryName}}</h2>
 {{if .found}}
-	{{range .logs}}
-	<p>{{.}}</p>
+	{{if .logs}}
+		{{range .logs}}
+		<p>{{.}}</p>
+		{{end}}
+	{{else}}
+		<p>Query logs is empty. Please see <a href='job_logs?job={{.jobName}}'>Job logs</a></p>
 	{{end}}
 {{else}}
-	<p>Logs not found. Please see <a href='job_logs?job={{.jobName}}'>job logs</a></p>
+	<p>Job/query not found. Please see logs on logs server</p>
 {{end}}
 </body>
 </html>`
+
+const jobTestPageTemplate string = `<html>
+<head>
+	<title>SQL Exporter</title>
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+</head>
+<body>
+<div class="container-fluid">
+<h1>SQL Exporter</h1>
+<h2>Check your job</h2>
+{{if .logs}}
+<h3>Config</h3>
+<pre>{{ .config }}</pre>
+<h3>Logs</h3>
+{{range .logs}}
+<p>{{.}}</p>
+{{end}}
+{{if .metrics}}
+<h3>Metrics</h3>
+<pre style="word-wrap: break-word; white-space: pre-wrap;">{{ .metrics }}</pre>
+{{end}}
+{{else}}
+<form method="POST">
+
+<div class="form-group">
+	<label for="name">Job name</label>
+	<input type="text" class="form-control" name="name" id="name" placeholder="job_name" required>
+	<small id="nameHelp" class="form-text text-muted">Each job needs a unique name, it's used for logging and as an default label.</small>
+</div>
+
+<div class="form-group">
+	<label for="interval">Job interval</label>
+	<input type="text" class="form-control" name="interval" id="interval" placeholder="5m" required>
+	<small id="intervalHelp" class="form-text text-muted">Interval defined the pause between the runs of this job.</small>
+</div>
+
+<div class="form-group">
+	<label for="connections">Job connections</label>
+	<input type="text" class="form-control" name="connections" id="connections" placeholder="sqlserver://usr:pswd@host1 sqlserver://usr:pswd@host2" required>
+	<small id="connectionsHelp" class="form-text text-muted">Connections is an array of connection URLs. Each query will be executed on each connection. Use space separation. Example: 'sqlserver://usr:pswd@host1 sqlserver://usr:pswd@host2'.</small>
+</div>
+
+<div class="form-group">
+	<label for="queryName">Query name</label>
+	<input type="text" class="form-control" name="query.name" id="queryName" placeholder="query_name" required>
+	<small id="queryNameHelp" class="form-text text-muted">Query name is prefied with 'sql_' and used as the metric name.</small>
+</div>
+
+<div class="form-group">
+	<label for="queryHelp">Query help</label>
+	<input type="text" class="form-control" name="query.help" id="queryHelp" placeholder="query help" required>
+	<small id="queryNameHelp" class="form-text text-muted">Help is a requirement of the Prometheus default registry, currently not used by the Prometheus server. <red>Important: Must be the same for all metrics with the same name!</red></small>
+</div>
+<div class="form-group">
+	<label for="labels">Query labels</label>
+	<input type="text" class="form-control" name="query.labels" id="labels" placeholder="label1 label2 label3">
+	<small id="labelsHelp" class="form-text text-muted">Labels is an array of columns which will be used as additional labels. <red>Must be the same for all metrics with the same name! All labels columns should be of type text, varchar or string</red>.</small>
+</div>
+
+<div class="form-group">
+	<label for="values">Query values</label>
+	<input type="text" class="form-control" name="query.values" id="values" placeholder="value1 value2 value3">
+	<small id="valuesHelp" class="form-text text-muted">Values is an array of columns used as metric values. All values should be of type float.</small>
+</div>
+
+<div class="form-group">
+	<label for="query">Query</label>
+	<textarea rows=3 class="form-control" name="query.query" id="query" placeholder="sql statement"></textarea>
+	<small id="queryHelp" class="form-text text-muted">Query is the SQL query that is run unalterted on the each of the connections for this job.</small>
+</div>
+<button type="submit" class="btn btn-primary">Submit</button>
+</form>
+{{end}}
+</div>
+</body>
+</html>`
+
+func jobTestPageHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	t := template.New("job_test")
+	t, _ = t.Parse(jobTestPageTemplate)
+	data := make(map[string]interface{})
+	defer t.Execute(w, data)
+	if r.Form.Get("name") == "" {
+		return
+	}
+	var labels []string
+	if r.Form.Get("query.labels") != "" {
+		labels = strings.Split(r.Form.Get("query.labels"), " ")
+	}
+	query := &Query{
+		Name:   r.Form.Get("query.name"),
+		Help:   r.Form.Get("query.help"),
+		Labels: labels,
+		Values: strings.Split(r.Form.Get("query.values"), " "),
+		Query:  r.Form.Get("query.query"),
+	}
+	interval, _ := time.ParseDuration(r.Form.Get("interval"))
+	job := &Job{
+		Name:        r.Form.Get("name"),
+		Interval:    interval,
+		Connections: strings.Split(r.Form.Get("connections"), " "),
+		Queries:     []*Query{query},
+	}
+	logger := log.NewJSONLogger(os.Stdout)
+	logger = log.With(logger,
+		"ts", log.DefaultTimestampUTC,
+		"caller", log.DefaultCaller,
+	)
+	expLogger := newRotationLogger(logger, 100)
+	job.Init(expLogger, make(map[string]string))
+	job.Prepare()
+	checkExporter := &Exporter{
+		jobs:   []*Job{job},
+		logger: expLogger,
+	}
+	checkExporter.RunOnce()
+	data["logs"] = job.Logger.GetHistory()
+	checkPrometheusReg := prometheus.NewRegistry()
+	checkPrometheusReg.MustRegister(checkExporter)
+	var f File
+	f.Jobs = []*Job{job}
+	config, _ := yaml.Marshal(f)
+	data["config"] = string(config)
+	defer checkPrometheusReg.Unregister(checkExporter)
+	gathering, err := checkPrometheusReg.Gather()
+	if err != nil {
+		level.Error(job.Logger).Log("msg", "Error get Prometheus Gathers", "err", err)
+		return
+	}
+	out := &bytes.Buffer{}
+	for _, mf := range gathering {
+		if _, err := expfmt.MetricFamilyToText(out, mf); err != nil {
+			level.Error(job.Logger).Log("msg", "Error read metrics from Prometheus Gathers", "err", err)
+		}
+	}
+	data["metrics"] = out
+}
 
 func init() {
 	prometheus.MustRegister(version.NewCollector("sql_exporter"))
@@ -88,9 +249,9 @@ func main() {
 		listenAddress = flag.String("web.listen-address", ":9237", "Address to listen on for web interface and telemetry.")
 		metricsPath   = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		configFile    = flag.String("config.file", os.Getenv("CONFIG"), "SQL Exporter configuration file name.")
-		configCheck   = flag.Bool("config.check", false, "SQL Exporter check configuration file.")
-		check         = flag.Bool("check", false, "SQL Exporter check exporter, jobs and queries.")
-		historyLimit  = flag.Uint("history.limit", 100, "SQL Exporter check exporter, jobs and queries.")
+		configCheck   = flag.Bool("config.check", false, "Check configuration file structure.")
+		check         = flag.Bool("check", false, "Check exporter, jobs and queries.")
+		historyLimit  = flag.Uint("history.limit", 100, "History limit for jobs/query logs in web-UI.")
 	)
 
 	flag.Parse()
@@ -139,7 +300,7 @@ func main() {
 	if *check {
 		expLogger.SetLogger(level.NewFilter(logger, level.AllowWarn()))
 		exporter.RunOnce()
-		if expLogger.GerErrorsCount() > 0 {
+		if expLogger.errorCounter > 0 {
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -164,7 +325,7 @@ func main() {
 				for _, q := range j.Queries {
 					if q.Name == query {
 						data["found"] = true
-						data["logs"] = q.Log.GetHistory()
+						data["logs"] = q.Logger.GetHistory()
 					}
 				}
 			}
@@ -182,11 +343,17 @@ func main() {
 		for _, j := range exporter.jobs {
 			if job == j.Name {
 				data["found"] = true
-				data["logs"] = j.log.GetHistory()
+				data["logs"] = j.Logger.GetHistory()
 			}
 		}
 		t.Execute(w, data)
 	})
+
+	http.Handle("/job_test", http.TimeoutHandler(
+		http.HandlerFunc(jobTestPageHandler),
+		time.Second*60,
+		"Your request is too long",
+	))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t := template.New("index")

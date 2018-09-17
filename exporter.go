@@ -10,11 +10,11 @@ import (
 // Exporter collects SQL metrics. It implements prometheus.Collector.
 type Exporter struct {
 	jobs   []*Job
-	logger RotationLogger
+	logger *RotationLogger
 }
 
 // NewExporter returns a new SQL Exporter for the provided config.
-func NewExporter(logger RotationLogger, configFile string) (*Exporter, error) {
+func NewExporter(logger *RotationLogger, configFile string) (*Exporter, error) {
 	if configFile == "" {
 		configFile = "config.yml"
 	}
@@ -114,7 +114,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				query.errDesc,
 				prometheus.CounterValue,
-				float64(query.Log.GerErrorsCount()),
+				float64(query.Logger.errorCounter),
 			)
 		}
 	}

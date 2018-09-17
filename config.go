@@ -37,19 +37,19 @@ func Read(path string) (File, error) {
 // File is a collection of jobs
 type File struct {
 	Jobs    []*Job            `yaml:"jobs"`
-	Queries map[string]string `yaml:"queries"`
+	Queries map[string]string `yaml:"queries,omitempty"`
 }
 
 // Job is a collection of connections and queries
 type Job struct {
-	log         RotationLogger
+	Logger      *RotationLogger `yaml:"-"` // Logger for collecting job-level logs (connections problems, etc.)
 	conns       []*connection
-	Name        string        `yaml:"name"`      // name of this job
-	KeepAlive   bool          `yaml:"keepalive"` // keep connection between runs?
-	Interval    time.Duration `yaml:"interval"`  // interval at which this job is run
+	Name        string        `yaml:"name"`                // name of this job
+	KeepAlive   bool          `yaml:"keepalive,omitempty"` // keep connection between runs?
+	Interval    time.Duration `yaml:"interval"`            // interval at which this job is run
 	Connections []string      `yaml:"connections"`
 	Queries     []*Query      `yaml:"queries"`
-	StartupSQL  []string      `yaml:"startup_sql"` // SQL executed on startup
+	StartupSQL  []string      `yaml:"startup_sql,omitempty"` // SQL executed on startup
 }
 
 type connection struct {
@@ -63,15 +63,15 @@ type connection struct {
 
 // Query is an SQL query that is executed on a connection
 type Query struct {
-	sync.Mutex
-	Log      RotationLogger //log.Logger
-	desc     *prometheus.Desc
-	errDesc  *prometheus.Desc
-	metrics  map[*connection][]prometheus.Metric
-	Name     string   `yaml:"name"`      // the prometheus metric name
-	Help     string   `yaml:"help"`      // the prometheus metric help text
-	Labels   []string `yaml:"labels"`    // expose these columns as labels per gauge
-	Values   []string `yaml:"values"`    // expose each of these as an gauge
-	Query    string   `yaml:"query"`     // a literal query
-	QueryRef string   `yaml:"query_ref"` // references an query in the query map
+	sync.Mutex `yaml:"-"`
+	Logger     *RotationLogger `yaml:"-"` //Logger for collectiong query-level logs (invalid queries, etc.)
+	desc       *prometheus.Desc
+	errDesc    *prometheus.Desc
+	metrics    map[*connection][]prometheus.Metric
+	Name       string   `yaml:"name"`                // the prometheus metric name
+	Help       string   `yaml:"help"`                // the prometheus metric help text
+	Labels     []string `yaml:"labels,omitempty"`    // expose these columns as labels per gauge
+	Values     []string `yaml:"values"`              // expose each of these as an gauge
+	Query      string   `yaml:"query,flow"`          // a literal query
+	QueryRef   string   `yaml:"query_ref,omitempty"` // references an query in the query map
 }

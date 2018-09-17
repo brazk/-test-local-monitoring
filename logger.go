@@ -8,32 +8,20 @@ import (
 	"github.com/go-kit/kit/log/level"
 )
 
-// RotationLogger has history rotated logs
-type RotationLogger interface {
-	Log(keyvals ...interface{}) error
-	SetLogger(logger log.Logger)
-	GetLogger() log.Logger
-	SetBufferLogger(logger log.Logger)
-	GetBuferLogger() log.Logger
-	GetHistory() []string
-	GetMaxMessages() uint
-	GerErrorsCount() uint
-	LastIsError() bool
-}
-
-type rotationLogger struct {
+//RotationLogger is logger wrapper for save history logs
+type RotationLogger struct {
 	mu           sync.Mutex
 	history      []string
 	maxMessages  uint
 	next         log.Logger
 	buffer       bytes.Buffer
 	bufferLogger log.Logger
-	lastIsError  bool
+	LastIsError  bool
 	errorCounter uint
 }
 
-func newRotationLogger(logger log.Logger, maxMessages uint) RotationLogger {
-	rl := &rotationLogger{
+func newRotationLogger(logger log.Logger, maxMessages uint) *RotationLogger {
+	rl := &RotationLogger{
 		next:        logger,
 		maxMessages: maxMessages,
 		buffer:      bytes.Buffer{},
@@ -44,14 +32,15 @@ func newRotationLogger(logger log.Logger, maxMessages uint) RotationLogger {
 	return rl
 }
 
-func (rl *rotationLogger) Log(keyvals ...interface{}) error {
+//Log - save message to histiry, count errors and pass message to next logger
+func (rl *RotationLogger) Log(keyvals ...interface{}) error {
 	for i := 0; i < len(keyvals); i += 2 {
 		if keyvals[i] == level.Key() {
 			if keyvals[i+1] == level.WarnValue() || keyvals[i+1] == level.ErrorValue() {
 				rl.errorCounter++
-				rl.lastIsError = true
+				rl.LastIsError = true
 			} else {
-				rl.lastIsError = false
+				rl.LastIsError = false
 			}
 		}
 	}
@@ -59,29 +48,25 @@ func (rl *rotationLogger) Log(keyvals ...interface{}) error {
 	return rl.next.Log(keyvals...)
 }
 
-func (rl *rotationLogger) SetBufferLogger(logger log.Logger) {
-	rl.bufferLogger = logger
-}
-
-func (rl *rotationLogger) GetBuferLogger() log.Logger {
-	return rl.bufferLogger
-}
-
-func (rl *rotationLogger) GetHistory() []string {
+// GetHistory return last maxMessages messages
+func (rl *RotationLogger) GetHistory() []string {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	return rl.history
 }
 
-func (rl *rotationLogger) GetLogger() log.Logger {
+// GetLogger return next logger
+func (rl *RotationLogger) GetLogger() log.Logger {
 	return rl.next
 }
 
-func (rl *rotationLogger) SetLogger(logger log.Logger) {
+// SetLogger setup next logger
+func (rl *RotationLogger) SetLogger(logger log.Logger) {
 	rl.next = logger
 }
 
-func (rl *rotationLogger) addToHistory(keyvals ...interface{}) {
+//addToHistory add log message to history and rotate history
+func (rl *RotationLogger) addToHistory(keyvals ...interface{}) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	rl.bufferLogger.Log(keyvals...)
@@ -92,16 +77,4 @@ func (rl *rotationLogger) addToHistory(keyvals ...interface{}) {
 		rl.history = history
 	}
 	rl.buffer.Reset()
-}
-
-func (rl *rotationLogger) GetMaxMessages() uint {
-	return rl.maxMessages
-}
-
-func (rl *rotationLogger) LastIsError() bool {
-	return rl.lastIsError
-}
-
-func (rl rotationLogger) GerErrorsCount() uint {
-	return rl.errorCounter
 }
