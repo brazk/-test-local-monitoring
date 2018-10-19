@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -24,10 +25,13 @@ func (q *Query) Run(conn *connection) error {
 		return fmt.Errorf("db connection not initialized (should not happen)")
 	}
 	// execute query
+	start := time.Now()
 	rows, err := conn.conn.Queryx(q.Query)
 	if err != nil {
 		return err
 	}
+	queryDuration := time.Since(start)
+	q.Durations.Observe(float64(queryDuration))
 	defer rows.Close()
 
 	updated := 0

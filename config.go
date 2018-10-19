@@ -67,6 +67,7 @@ type Query struct {
 	Logger     *RotationLogger `yaml:"-"` //Logger for collectiong query-level logs (invalid queries, etc.)
 	desc       *prometheus.Desc
 	errDesc    *prometheus.Desc
+	Durations  prometheus.Summary
 	metrics    map[*connection][]prometheus.Metric
 	Name       string   `yaml:"name"`                // the prometheus metric name
 	Help       string   `yaml:"help"`                // the prometheus metric help text
