@@ -75,6 +75,16 @@ func (j *Job) Init(logger *RotationLogger, queries map[string]string) error {
 				"sql_query": q.Name,
 			},
 		)
+		q.Durations = prometheus.NewSummary(prometheus.SummaryOpts{
+			Name:       "sql_query_durations",
+			Help:       "SQL query durations.",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+			ConstLabels: prometheus.Labels{
+				"sql_job":   j.Name,
+				"sql_query": q.Name,
+			},
+		})
+		prometheus.MustRegister(q.Durations)
 	}
 	return nil
 }
