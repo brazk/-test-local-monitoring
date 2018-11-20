@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/kshvakov/clickhouse" // register the ClickHouse driver
 	_ "github.com/lib/pq"              // register the PostgreSQL driver
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -25,7 +27,13 @@ var (
 )
 
 // Init will initialize the metric descriptors
-func (j *Job) Init(logger *RotationLogger, queries map[string]string) error {
+func (j *Job) Init(tracer opentracing.Tracer, logger *RotationLogger, queries map[string]string) error {
+	if tracer == nil {
+		// No tracing found, use noop one.
+		tracer = &opentracing.NoopTracer{}
+	}
+
+	j.tracer = &tracer
 	j.Logger = newRotationLogger(logger, logger.maxMessages)
 	j.Logger.SetLogger(log.With(j.Logger.GetLogger(), "job", j.Name))
 	// register each query as an metric
@@ -153,9 +161,12 @@ func (j *Job) RunOnce() {
 }
 
 func (j *Job) runOnceConnection(conn *connection, done chan int) {
+	span := (*j.tracer).StartSpan("job.runOnceConnection")
+	span.SetTag("job.name", j.Name)
 	updated := 0
 	defer func() {
 		done <- updated
+		span.Finish()
 	}()
 
 	// connect to DB if not connected already
@@ -164,6 +175,7 @@ func (j *Job) runOnceConnection(conn *connection, done chan int) {
 		return
 	}
 
+	ctx := ContextWithTracer(opentracing.ContextWithSpan(context.Background(), span), *j.tracer)
 	for _, q := range j.Queries {
 		if q == nil {
 			continue
@@ -175,7 +187,7 @@ func (j *Job) runOnceConnection(conn *connection, done chan int) {
 		}
 		level.Debug(q.Logger).Log("msg", "Running Query")
 		// execute the query on the connection
-		if err := q.Run(conn); err != nil {
+		if err := q.Run(ctx, conn); err != nil {
 			level.Warn(q.Logger).Log("msg", "Failed to run query", "err", err)
 			continue
 		}
