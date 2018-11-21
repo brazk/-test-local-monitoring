@@ -12,10 +12,15 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/version"
+	"github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
+	ozonTracing "gitlab.ozon.ru/platform/tracer-go"
 	"gopkg.in/yaml.v2"
 )
 
@@ -210,7 +215,8 @@ func jobTestPageHandler(w http.ResponseWriter, r *http.Request) {
 		"caller", log.DefaultCaller,
 	)
 	expLogger := newRotationLogger(logger, 100)
-	job.Init(expLogger, make(map[string]string))
+	tracer := opentracing.GlobalTracer()
+	job.Init(tracer, expLogger, make(map[string]string))
 	job.Prepare()
 	checkExporter := &Exporter{
 		jobs:   []*Job{job},
@@ -285,7 +291,30 @@ func main() {
 
 	expLogger := newRotationLogger(logger, *historyLimit)
 
-	exporter, err := NewExporter(expLogger, *configFile)
+	if tracingServiceName := os.Getenv("JAEGER_SERVICE_NAME"); tracingServiceName == "" {
+		jaegerServiceName := "sql_exporter"
+		if hostname, err := os.Hostname(); err == nil {
+			jaegerServiceName = fmt.Sprintf("%s_at_%s", jaegerServiceName, hostname)
+		}
+
+		os.Setenv("JAEGER_SERVICE_NAME", jaegerServiceName)
+	}
+
+	var tracer opentracing.Tracer
+
+	// Setup optional tracing.
+	{
+		closer, err := ozonTracing.Init(config.Logger(jaeger.StdLogger))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error initializing tracer"))
+			os.Exit(1)
+		}
+		defer closer.Close()
+
+		tracer = opentracing.GlobalTracer()
+	}
+
+	exporter, err := NewExporter(tracer, expLogger, *configFile)
 	if err != nil {
 		level.Error(logger).Log("msg", "Error starting exporter", "err", err)
 		os.Exit(1)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v2"
 )
@@ -50,6 +51,7 @@ type Job struct {
 	Connections []string      `yaml:"connections"`
 	Queries     []*Query      `yaml:"queries"`
 	StartupSQL  []string      `yaml:"startup_sql,omitempty"` // SQL executed on startup
+	tracer      *opentracing.Tracer
 }
 
 type connection struct {

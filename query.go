@@ -7,11 +7,22 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/net/context"
 )
 
 // Run executes a single Query on a single connection
-func (q *Query) Run(conn *connection) error {
+func (q *Query) Run(ctx context.Context, conn *connection) error {
+	var span opentracing.Span
+	var opts []opentracing.StartSpanOption
+	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
+		opts = append(opts, opentracing.ChildOf(parentSpan.Context()))
+	}
+	span = tracerFromContext(ctx).StartSpan("query.Run", opts...)
+	span.SetTag("query.name", q.Name)
+	defer span.Finish()
+
 	if q.Logger == nil {
 		q.Logger = newRotationLogger(log.NewNopLogger(), 100)
 	}

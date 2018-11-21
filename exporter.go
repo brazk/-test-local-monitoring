@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/go-kit/kit/log/level"
+	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -14,7 +15,7 @@ type Exporter struct {
 }
 
 // NewExporter returns a new SQL Exporter for the provided config.
-func NewExporter(logger *RotationLogger, configFile string) (*Exporter, error) {
+func NewExporter(tracer opentracing.Tracer, logger *RotationLogger, configFile string) (*Exporter, error) {
 	if configFile == "" {
 		configFile = "config.yml"
 	}
@@ -35,7 +36,7 @@ func NewExporter(logger *RotationLogger, configFile string) (*Exporter, error) {
 		if job == nil {
 			continue
 		}
-		if err := job.Init(logger, cfg.Queries); err != nil {
+		if err := job.Init(tracer, logger, cfg.Queries); err != nil {
 			level.Warn(logger).Log("msg", "Skipping job. Failed to initialize", "err", err, "job", job.Name)
 			continue
 		}
