@@ -2,34 +2,36 @@
   cache:
     key: "vgo-cache"
     paths:
-      - ${CI_PROJECT_DIR}/.cache/go/pkg/mod/
-      - ${CI_PROJECT_DIR}/.cache/go/bin/
+    - ${CI_PROJECT_DIR}/.cache/go/pkg/mod/
+    - ${CI_PROJECT_DIR}/.cache/go/bin/
 
 stages:
-  - build
-  - push
+- build
+- push
+- push-latest
 
 variables:
   CONTAINER_CURRENT_IMAGE: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_NAME}
+  CONTAINER_IMAGE_LATEST: ${CI_REGISTRY_IMAGE}:latest
 
 compile:
   image: golang:1.11.0
   stage: build
   <<: *build-cache
   before_script:
-    - echo $CI_COMMIT_REF_NAME-$CI_COMMIT_SHA
-    - git config --global credential.helper store && echo "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.ozon.ru" >> ~/.git-credentials
-    - go get github.com/mitchellh/gox
-    - export GOPATH=${CI_PROJECT_DIR}/.cache/go
-    - mkdir -p $GOPATH/src/gitlab.ozon.ru/sre
-    - ln -sf /builds/sre/sql-exporter $GOPATH/src/gitlab.ozon.ru/sre/sql-exporter
-    - mkdir -p bin
-    - export APP_VERSION=${CI_COMMIT_REF_NAME}-$(echo ${CI_COMMIT_SHA} | cut -c 1-8)
+  - echo $CI_COMMIT_REF_NAME-$CI_COMMIT_SHA
+  - git config --global credential.helper store && echo "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.ozon.ru" >> ~/.git-credentials
+  - go get github.com/mitchellh/gox
+  - export GOPATH=${CI_PROJECT_DIR}/.cache/go
+  - mkdir -p $GOPATH/src/gitlab.ozon.ru/sre
+  - ln -sf /builds/sre/sql-exporter $GOPATH/src/gitlab.ozon.ru/sre/sql-exporter
+  - mkdir -p bin
+  - export APP_VERSION=${CI_COMMIT_REF_NAME}-$(echo ${CI_COMMIT_SHA} | cut -c 1-8)
   script:
-    - gox -ldflags "-X 'gitlab.ozon.ru/sre/sql_exporter.version=${APP_VERSION}'" -output="bin/{{.OS}}_{{.Arch}}/sql_exporter" -osarch="darwin/amd64 linux/amd64 windows/amd64" gitlab.ozon.ru/sre/sql-exporter
+  - gox -ldflags "-X 'gitlab.ozon.ru/sre/sql_exporter.version=${APP_VERSION}'" -output="bin/{{.OS}}_{{.Arch}}/sql_exporter" -osarch="darwin/amd64 linux/amd64 windows/amd64" gitlab.ozon.ru/sre/sql-exporter
   artifacts:
     paths:
-      - bin/
+    - bin/
     expire_in: 20 minutes
 
 
@@ -38,9 +40,26 @@ push-image:
   allow_failure: false
   image: docker:stable
   before_script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
   after_script:
-    - docker logout $CI_REGISTRY
+  - docker logout $CI_REGISTRY
   script:
-    - docker build -t $CONTAINER_CURRENT_IMAGE .
-    - docker push $CONTAINER_CURRENT_IMAGE
+  - docker build --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY -t $CONTAINER_CURRENT_IMAGE .
+  - docker push $CONTAINER_CURRENT_IMAGE
+
+
+push-image-latest:
+  stage: push-latest
+  allow_failure: false
+  image: docker:stable
+  dependencies:
+  - push-image
+  before_script:
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  after_script:
+  - docker logout $CI_REGISTRY
+  script:
+  - docker image tag $CONTAINER_CURRENT_IMAGE ${CONTAINER_IMAGE_LATEST}
+  - docker push $CONTAINER_IMAGE_LATEST
+  only:
+  - tags
