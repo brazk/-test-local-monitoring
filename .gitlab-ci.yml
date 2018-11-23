@@ -59,7 +59,8 @@ push-image-latest:
   after_script:
   - docker logout $CI_REGISTRY
   script:
-  - docker image tag $CONTAINER_CURRENT_IMAGE ${CONTAINER_IMAGE_LATEST}
+  - docker pull $CONTAINER_CURRENT_IMAGE
+  - docker image tag $CONTAINER_CURRENT_IMAGE $CONTAINER_IMAGE_LATEST
   - docker push $CONTAINER_IMAGE_LATEST
   only:
   - tags
