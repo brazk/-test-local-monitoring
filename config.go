@@ -43,15 +43,16 @@ type File struct {
 
 // Job is a collection of connections and queries
 type Job struct {
-	Logger      *RotationLogger `yaml:"-"` // Logger for collecting job-level logs (connections problems, etc.)
-	conns       []*connection
-	Name        string        `yaml:"name"`                // name of this job
-	KeepAlive   bool          `yaml:"keepalive,omitempty"` // keep connection between runs?
-	Interval    time.Duration `yaml:"interval"`            // interval at which this job is run
-	Connections []string      `yaml:"connections"`
-	Queries     []*Query      `yaml:"queries"`
-	StartupSQL  []string      `yaml:"startup_sql,omitempty"` // SQL executed on startup
-	tracer      *opentracing.Tracer
+	Logger          *RotationLogger `yaml:"-"` // Logger for collecting job-level logs (connections problems, etc.)
+	conns           []*connection
+	Name            string        `yaml:"name"`                // name of this job
+	KeepAlive       bool          `yaml:"keepalive,omitempty"` // keep connection between runs?
+	Interval        time.Duration `yaml:"interval"`            // interval at which this job is run
+	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`   // interval at which this job is run
+	Connections     []string      `yaml:"connections"`
+	Queries         []*Query      `yaml:"queries"`
+	StartupSQL      []string      `yaml:"startup_sql,omitempty"` // SQL executed on startup
+	tracer          *opentracing.Tracer
 }
 
 type connection struct {
