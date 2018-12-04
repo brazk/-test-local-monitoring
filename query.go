@@ -63,10 +63,6 @@ func (q *Query) Run(ctx context.Context, conn *connection) error {
 		updated++
 	}
 
-	if updated < 1 {
-		return fmt.Errorf("zero rows returned")
-	}
-
 	// update the metrics cache
 	q.Lock()
 	q.metrics[conn] = metrics
