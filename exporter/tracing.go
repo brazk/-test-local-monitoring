@@ -1,8 +1,7 @@
-package main
+package exporter
 
 import (
 	"context"
-	"github.com/opentracing/opentracing-go"
 )
 
 type contextKey struct{}

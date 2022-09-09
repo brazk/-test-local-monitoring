@@ -1,4 +1,4 @@
-package main
+package exporter
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/kshvakov/clickhouse" // register the ClickHouse driver
 	_ "github.com/lib/pq"              // register the PostgreSQL driver
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

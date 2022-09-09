@@ -1,4 +1,4 @@
-package main
+package exporter
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 )
 
-//RotationLogger is logger wrapper for save history logs
+// RotationLogger is logger wrapper for save history logs
 type RotationLogger struct {
 	mu           sync.Mutex
 	history      []string
@@ -32,7 +32,7 @@ func newRotationLogger(logger log.Logger, maxMessages uint) *RotationLogger {
 	return rl
 }
 
-//Log - save message to histiry, count errors and pass message to next logger
+// Log - save message to histiry, count errors and pass message to next logger
 func (rl *RotationLogger) Log(keyvals ...interface{}) error {
 	for i := 0; i < len(keyvals); i += 2 {
 		if keyvals[i] == level.Key() {
@@ -65,7 +65,7 @@ func (rl *RotationLogger) SetLogger(logger log.Logger) {
 	rl.next = logger
 }
 
-//addToHistory add log message to history and rotate history
+// addToHistory add log message to history and rotate history
 func (rl *RotationLogger) addToHistory(keyvals ...interface{}) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

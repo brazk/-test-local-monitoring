@@ -1,4 +1,4 @@
-package main
+package exporter
 
 import (
 	"io/ioutil"
@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/yaml.v2"
 )
 
 // Read attempts to parse the given config and return a file

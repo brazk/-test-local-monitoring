@@ -1,10 +1,9 @@
-package main
+package exporter
 
 import (
 	"sync"
 
 	"github.com/go-kit/kit/log/level"
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
