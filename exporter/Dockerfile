@@ -1,5 +1,5 @@
 FROM quay.io/prometheus/busybox:glibc
 
-COPY /bin/linux_amd64/sql_exporter /bin/sql_exporter
+COPY /bin/sql-exporter-test /bin/sql-exporter-test
 
-ENTRYPOINT ["sql_exporter"]
+ENTRYPOINT ["/bin/sql-exporter-test"]
