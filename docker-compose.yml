@@ -26,6 +26,8 @@ services:
       -  exporter:/exporter
     environment:
       - CONFIG=/etc/sql-exporter.yml
+    ports:
+      - "9237:9237"
     networks:
       - monitoring
 #  node-exporter:
