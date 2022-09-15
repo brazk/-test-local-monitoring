@@ -36,7 +36,7 @@ jobs:
     # connections is an array of connection URLs
     # each query will be executed on each connection
     connections:
-      - 'postgresql://jarvis_user:jarvis_test@postgres:5433/jarvis_test?sslmode=disable'
+      - 'postgres://jarvis_user:jarvis_test@postgres/jarvis_test?sslmode=disable'
     # startup_sql is an array of SQL statements
     # each statements is executed once after connecting
     # queries is a map of Metric/Query mappings
@@ -75,7 +75,7 @@ jobs:
   - name: "master-nodes"
     interval: '1m'
     connections:
-      - 'postgresql://jarvis_user:jarvis_test@postgres/postgres?sslmode=disable'
+      - 'postgres://jarvis_user:jarvis_test@postgres/postgres?sslmode=disable'
     queries:
         - name: "pg_settings"
           help: "Values of PostgreSQL runtime settings"
@@ -185,7 +185,7 @@ jobs:
     interval: '15m'
     keepalive: false
     connections:
-      - 'postgresql://jarvis_user:jarvis_test@postgres:5433/postgres?sslmode=disable'
+      - 'postgres://jarvis_user:jarvis_test@postgres/postgres?sslmode=disable'
     queries:
       - name: "pg_stat_user_tables"
         help: "Table stats"
