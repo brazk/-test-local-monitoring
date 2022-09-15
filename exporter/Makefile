@@ -41,8 +41,11 @@ vet:
 
 build: promu
 	@echo ">> building binaries"
-	@$(PROMU) build --prefix $(PREFIX)
+	@$(PROMU) build --prefix $(PREFIX) --config=".promu.yml"
 
+crossbuild: promu
+	@echo ">> building binaries"
+	@$(PROMU) crossbuild
 tarball: promu
 	@echo ">> building release tarball"
 	@$(PROMU) tarball --prefix $(PREFIX) $(BIN_DIR)
@@ -55,6 +58,8 @@ promu:
 	@GOOS=$(shell uname -s | tr A-Z a-z) \
 		GOARCH=$(subst x86_64,amd64,$(patsubst i%86,386,$(shell uname -m))) \
 		$(GO) get -u github.com/prometheus/promu
+
+
 
 
 .PHONY: all style format build test vet tarball docker promu
