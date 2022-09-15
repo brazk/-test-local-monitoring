@@ -30,7 +30,7 @@
 #          ORDER BY starttime
 jobs:
   # each job needs a unique name, it's used for logging and as an default label
-  - name: "duplicates_overtimes"
+  - name: "duplicates_≈"
     # interval defined the pause between the runs of this job
     interval: '1m'
     # cron_schedule when to execute the job in the standard CRON syntax
