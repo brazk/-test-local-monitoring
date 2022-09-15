@@ -1,30 +1,76 @@
 ---
+#jobs:
+#  - name: "duplicates_overtimes"
+#    interval: 1m
+#    engines:
+#      - alias: "monitoring_duplicates"
+#        type: "postgres"
+#        host: "localhost"
+#        port: 5432
+#        db: "jarvis_test"
+#        user: "jarvis_user"
+#        vault_key: "jarvis_test"
+#        connection_timeout: 60
+#    queries:
+#      - name: jarvis_duplicates_overtimes
+#        help: "Дубликаты при заведении овертайм"
+#        labels:
+#          - username
+#        values:
+#          - endtime
+#        query: |
+#          SELECT
+#            user_name,
+#            starttime,
+#            endtime
+#          FROM overtime_users T1
+#          WHERE (SELECT COUNT(*)
+#          FROM overtime_users T2
+#          WHERE T1.user_name = T2.user_name) > 1
+#          ORDER BY starttime
 jobs:
+  # each job needs a unique name, it's used for logging and as an default label
   - name: "duplicates_overtimes"
-    interval: 1m
-    engines:
-      - alias: "monitoring_duplicates"
-        type: "postgres"
-        host: "localhost"
-        port: 5432
-        db: "jarvis_test"
-        user: "jarvis_user"
-        vault_key: "jarvis_test"
-        connection_timeout: 60
+    # interval defined the pause between the runs of this job
+    interval: '1m'
+    # cron_schedule when to execute the job in the standard CRON syntax
+    # if specified, the interval is ignored
+    cron_schedule: "* * * * 1"
+    # connections is an array of connection URLs
+    # each query will be executed on each connection
+    connections:
+      - 'postgresql://jarvis_user:@jarvis_testlocalhost:5433/jarvis_test?sslmode=disable'
+    # startup_sql is an array of SQL statements
+    # each statements is executed once after connecting
+    # queries is a map of Metric/Query mappings
     queries:
-      - name: jarvis_duplicates_overtimes
-        help: "Дубликаты при заведении овертайм"
+      # name is prefied with sql_ and used as the metric name
+      - name: "running_queries"
+        # help is a requirement of the Prometheus default registry, currently not
+        # used by the Prometheus server. Important: Must be the same for all metrics
+        # with the same name!
+        help: "Number of running queries"
+        # Labels is an array of columns which will be used as additional labels.
+        # Must be the same for all metrics with the same name!
+        # All labels columns should be of type text, varchar or string
         labels:
-          - username
+          - "datname"
+          - "usename"
+        # Values is an array of columns used as metric values. All values should be
+        # of type float
         values:
-          - endtime
-        query: |
+          - "count"
+        # Query is the SQL query that is run unalterted on the each of the connections
+        # for this job
+        query:  |
           SELECT 
-            user_name,
-            starttime,
-            endtime
-          FROM overtime_users T1
-          WHERE (SELECT COUNT(*)
-          FROM overtime_users T2
-          WHERE T1.user_name = T2.user_name) > 1
-          ORDER BY starttime
+                    user_name,
+                    starttime,
+                    endtime
+                  FROM overtime_users T1
+                  WHERE (SELECT COUNT(*)
+                  FROM overtime_users T2
+                  WHERE T1.user_name = T2.user_name) > 1
+                  ORDER BY starttime
+        # Consider the query failed if it returns zero rows
+        allow_zero_rows: false
